@@ -1,0 +1,58 @@
+name: Build tun2socks for Android
+
+on:
+  workflow_dispatch:  
+    inputs:
+      version:
+        description: "Release version"
+        required: true
+        default: "v1.0.0"
+
+  push:
+    branches:
+      - '**'
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+
+    env:
+      NDK_VERSION: 26b
+      NDK_HOME: ${{ github.workspace }}/android-ndk
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Get current date tag
+        id: get_date
+        run: |
+          TAG="v$(date +'%y.%m.%d')"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Install NDK
+        run: |
+          wget https://dl.google.com/android/repository/android-ndk-r${NDK_VERSION}-linux.zip
+          unzip android-ndk-r${NDK_VERSION}-linux.zip
+          mv android-ndk-r${NDK_VERSION} $NDK_HOME
+          echo "$NDK_HOME" >> $GITHUB_PATH
+
+      - name: Build tun2socks
+        run: |
+          bash ./build-android-lib.sh
+
+      - name: Create and push tag if not exists
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag -f ${{ steps.get_date.outputs.tag }}
+          git push origin ${{ steps.get_date.outputs.tag }} --force
+
+      - name: Upload .tgz to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_date.outputs.tag }}
+          name: Release ${{ steps.get_date.outputs.tag }}
+          files: libtun2socks.so.tgz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
